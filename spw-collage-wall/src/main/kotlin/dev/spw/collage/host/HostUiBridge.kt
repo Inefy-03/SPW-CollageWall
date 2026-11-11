@@ -8,7 +8,6 @@ package dev.spw.collage.host
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.Composer
@@ -20,16 +19,61 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.xuncorp.spw.workshop.api.WorkshopApi
 import dev.spw.collage.CollageController
 import dev.spw.collage.CollageLog
 import java.lang.invoke.MethodType
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+
+/**
+ * The four filled tiles of assets/CollageWall.svg, in its 1024 x 1024 viewBox.
+ * Each entry is x, y, width, height. Drawing them straight onto the caption avoids
+ * an offscreen layer, which the host's Skia backend paints black.
+ */
+private val WallMarkTiles = arrayOf(
+    floatArrayOf(177f, 277f, 250f, 250f),
+    floatArrayOf(227f, 546f, 200f, 200f),
+    floatArrayOf(446f, 227f, 400f, 300f),
+    floatArrayOf(446f, 546f, 250f, 250f)
+)
+
+/** Drawn bounds of those tiles: left, top, width, height. The SVG pads the mark heavily. */
+private val WallMarkBounds = floatArrayOf(177f, 227f, 669f, 569f)
+
+/** The mod's tile mark, tinted for the host theme instead of hard-coded white. */
+@Composable
+private fun WallMark(tint: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(20.dp).drawBehind {
+            val left = WallMarkBounds[0]
+            val top = WallMarkBounds[1]
+            val width = WallMarkBounds[2]
+            val height = WallMarkBounds[3]
+            // Fitting the drawn bounds rather than the whole viewBox keeps the four
+            // tiles and their seams legible inside a 20 dp caption slot. The smaller
+            // inset keeps the mark visually lighter than the neighbouring caption icons.
+            val scale = minOf(size.width / width, size.height / height) * 0.78f
+            val originX = (size.width - width * scale) / 2f
+            val originY = (size.height - height * scale) / 2f
+            for (tile in WallMarkTiles) {
+                drawRect(
+                    color = tint,
+                    topLeft = Offset(
+                        originX + (tile[0] - left) * scale,
+                        originY + (tile[1] - top) * scale
+                    ),
+                    size = Size(tile[2] * scale, tile[3] * scale)
+                )
+            }
+        }
+    )
+}
 
 /** The only boundary that translates discovered JVM members into Compose calls. */
 class HostUiBridge(
@@ -156,19 +200,13 @@ class HostUiBridge(
         recoverPage()
         val openMenu: () -> Unit = controller::open
         val icon: @Composable BoxScope.() -> Unit = {
-            Box(Modifier.align(Alignment.Center).size(20.dp)) {
-                BasicText(
-                    "拼",
-                    Modifier.align(Alignment.Center),
-                    TextStyle(
-                        color = if (isDarkTheme()) Color.White else Color.Black,
-                        fontSize = 15.sp
-                    )
-                )
-            }
+            WallMark(
+                tint = if (isDarkTheme()) Color.White else Color.Black,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
         caption.invoke(
-            null, openMenu, "拼贴", Modifier, true, null, 0f,
+            null, openMenu, "Collage Wall", Modifier, true, null, 0f,
             icon, currentComposer, 0, 32
         )
     }

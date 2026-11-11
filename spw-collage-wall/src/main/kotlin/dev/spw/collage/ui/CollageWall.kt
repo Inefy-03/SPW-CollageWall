@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -33,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -68,9 +67,9 @@ import dev.spw.collage.CollageController
 import dev.spw.collage.CollageLayout
 import dev.spw.collage.GridFrame
 import dev.spw.collage.frame
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 
 private val TileGap = 8.dp
 
@@ -219,6 +218,23 @@ private fun SongWall(controller: CollageController) {
             derivedStateOf { visibleBlocks(pan.y, stepY, rows, viewportHeight, repeatY) }
         }
 
+        // The wall is not a scroll container — cards are placed by offset — so
+        // BringIntoViewRequester has nothing to scroll and an opened card could end up half
+        // outside the window. This moves the pan itself, by the smallest amount that makes
+        // the grown card readable.
+        ExpandFollow(
+            controller = controller,
+            pan = pan,
+            metrics = metrics,
+            columns = columns,
+            rows = rows,
+            blockCount = blockCount,
+            loop = loop,
+            viewportWidth = viewportWidth,
+            viewportHeight = viewportHeight,
+            margin = with(density) { 20.dp.roundToPx() }
+        )
+
         Box(Modifier.fillMaxSize().wallPan(pan, horizontal = columns > 1)) {
             // Keyed by the unbounded (row, column) the pan names, so a block keeps its
             // identity for as long as it stays in view and every block that enters is
@@ -262,6 +278,116 @@ private fun SongWall(controller: CollageController) {
             }
         }
     }
+}
+
+/**
+ * Pans the wall so an opened card is fully readable.
+ *
+ * Deliberately not a copy of the reference wall, which only nudges in one direction and can
+ * still leave a grown card clipped. Two rules here:
+ *
+ * 1. A card that already fits inside the viewport does not move the wall at all.
+ * 2. A card that would sit against an edge moves by exactly the overflow, so the wall keeps
+ *    its position as far as possible; a card taller or wider than the viewport is centred.
+ *
+ * The move is animated and aborts as soon as something else touches the pan (a drag, a
+ * wheel, a clamped edge), so the follow never fights the pointer.
+ */
+@Composable
+private fun ExpandFollow(
+    controller: CollageController,
+    pan: WallPanState,
+    metrics: WallMetrics,
+    columns: Int,
+    rows: Int,
+    blockCount: Int,
+    loop: Boolean,
+    viewportWidth: Int,
+    viewportHeight: Int,
+    margin: Int
+) {
+    val expandedKey = controller.expandedKey
+    LaunchedEffect(expandedKey, metrics, columns, rows, blockCount, loop) {
+        val key = expandedKey ?: return@LaunchedEffect
+        val parts = key.split(':')
+        if (parts.size != 3) return@LaunchedEffect
+        val row = parts[0].toIntOrNull() ?: return@LaunchedEffect
+        val column = parts[1].toIntOrNull() ?: return@LaunchedEffect
+        val slot = parts[2].toIntOrNull() ?: return@LaunchedEffect
+        if (columns <= 0 || rows <= 0 || blockCount <= 0) return@LaunchedEffect
+        if (slot !in 0 until CollageLayout.SLOTS_PER_BLOCK) return@LaunchedEffect
+
+        val seat = Math.floorMod(row, rows) * columns + Math.floorMod(column, columns)
+        val blockIndex = if (loop) Math.floorMod(seat, blockCount) else seat
+        if (blockIndex !in 0 until blockCount) return@LaunchedEffect
+
+        val rect = CollageLayout.layout(blockIndex, slot)[slot]
+        val cardWidth = metrics.span(rect.cols.toFloat()).toFloat()
+        val cardHeight = metrics.span(rect.rows.toFloat()).toFloat()
+        val left = column * metrics.stepX - pan.x + metrics.startX(rect.x.toFloat())
+        val top = row * metrics.stepY - pan.y + metrics.startY(rect.y.toFloat())
+
+        val shiftX = bringIntoViewShift(left, cardWidth, viewportWidth, margin)
+            .takeIf { abs(it) >= MinFollowShift } ?: 0f
+        val shiftY = bringIntoViewShift(top, cardHeight, viewportHeight, margin)
+            .takeIf { abs(it) >= MinFollowShift } ?: 0f
+        if (shiftX == 0f && shiftY == 0f) return@LaunchedEffect
+
+        val startX = pan.x
+        val startY = pan.y
+        // A positive shift means the content has to slide towards the start of the axis, which
+        // the pan does by growing. Getting this sign wrong sends the card further out of view.
+        val targetX = startX + shiftX
+        val targetY = startY + shiftY
+        var firstFrame = -1L
+        while (true) {
+            val now = withFrameNanos { it }
+            if (firstFrame < 0L) firstFrame = now
+            // Shorter than the 360 ms growth on purpose. The card grows away from its centre
+            // while the pan slides the opposite way to pull it back; letting both run for the
+            // same stretch makes those two motions fight and reads as the wall jerking. The
+            // pan gets out of the way first, then the card finishes growing into free space.
+            val fraction = ((now - firstFrame) / FollowDurationNanos).coerceIn(0f, 1f)
+            val eased = FastOutSlowInEasing.transform(fraction)
+            val nextX = startX + (targetX - startX) * eased
+            val nextY = startY + (targetY - startY) * eased
+            pan.moveTo(nextX, nextY, horizontal = true)
+            // A clamped axis stops short of the target and the pointer can take over at any
+            // frame; either way this follow is done.
+            if (abs(pan.x - nextX) > 1f || abs(pan.y - nextY) > 1f) return@LaunchedEffect
+            if (fraction >= 1f) return@LaunchedEffect
+        }
+    }
+}
+
+/**
+ * The pan finishes before the card does, so the two never travel against each other for the
+ * whole gesture.
+ */
+private const val FollowDurationNanos = 240_000_000f
+
+/**
+ * Overflow below this is not worth a move. A card clipped by a dozen pixels is invisible next
+ * to the card, while a nudge that small reads as the whole wall twitching.
+ */
+private const val MinFollowShift = 16f
+
+/**
+ * How far the content must move so `[start, start + size]` sits inside `[margin, viewport - margin]`.
+ * Positive values mean the content moves towards the start of the axis.
+ */
+internal fun bringIntoViewShift(start: Float, size: Float, viewport: Int, margin: Int): Float {
+    if (viewport <= 0) return 0f
+    val roomy = size + margin * 2f <= viewport
+    if (!roomy) {
+        // Larger than the window: centre it, which is the only readable position.
+        return start - (viewport - size) / 2f
+    }
+    if (start < margin) return start - margin
+    val end = start + size
+    val limit = viewport - margin
+    if (end > limit) return end - limit
+    return 0f
 }
 
 @Composable
@@ -430,7 +556,6 @@ private fun SongTile(
     // Derived, so a track change recomposes only the card that took or lost the ring;
     // reading playingId in the block used to recompose every visible block.
     val playing by remember(track.id) { derivedStateOf { track.id == controller.playingId } }
-    val bringIntoView = remember(track.id) { BringIntoViewRequester() }
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
 
@@ -470,18 +595,11 @@ private fun SongTile(
         label = "tile-scrim"
     )
 
-    // A grown card can extend past the viewport; keep it fully readable. Only the opened
-    // card needs the request node, so the others do not carry one.
-    LaunchedEffect(expanded) {
-        if (expanded) {
-            delay(64)
-            runCatching { bringIntoView.bringIntoView() }
-        }
-    }
+    // A grown card can extend past the viewport. Nothing here asks for it: the wall has no
+    // scroll container to bring it into view, so [ExpandFollow] moves the pan instead.
 
     Box(
         modifier
-            .then(if (expanded) Modifier.bringIntoViewRequester(bringIntoView) else Modifier)
             .zIndex(if (expanded) 20f else if (hovered) 8f else 0f)
             // Hover is measured on the un-scaled bounds. Behind the scale it would sit on the
             // grown edge, so pointing near a border flipped hover on and off every frame.

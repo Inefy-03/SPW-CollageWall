@@ -133,3 +133,30 @@ class WallPanStateTest {
         )
     }
 }
+
+/**
+ * The pan an opened card asks for. Smallest possible move, so a card that already fits leaves
+ * the wall alone and a card at an edge only slides back by its own overflow.
+ */
+class ExpandFollowShiftTest {
+
+    @Test
+    fun `a card that already fits asks for no movement`() {
+        assertEquals(0f, bringIntoViewShift(100f, 200f, viewport = 1000, margin = 20), 0.001f)
+    }
+
+    @Test
+    fun `a card past the leading edge asks for exactly its overflow`() {
+        assertEquals(-80f, bringIntoViewShift(-60f, 200f, viewport = 1000, margin = 20), 0.001f)
+    }
+
+    @Test
+    fun `a card past the trailing edge asks for exactly its overflow`() {
+        assertEquals(120f, bringIntoViewShift(900f, 200f, viewport = 1000, margin = 20), 0.001f)
+    }
+
+    @Test
+    fun `a card larger than the viewport is centred instead`() {
+        assertEquals(100f, bringIntoViewShift(0f, 1200f, viewport = 1000, margin = 20), 0.001f)
+    }
+}
