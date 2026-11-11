@@ -1,0 +1,26 @@
+{
+  "configs": [
+    {
+      "title": "墙面",
+      "config": "config.json",
+      "preferences": [
+        {
+          "key": "scroll.vertical_only",
+          "type": "switch",
+          "title": "仅纵向滑动",
+          "summary": "关闭时墙面可上下左右自由平移，开启后只保留纵向滚动",
+          "default_value": false
+        },
+        {
+          "key": "card.corner_radius",
+          "type": "seekbar",
+          "title": "卡片圆角",
+          "summary": "0 为直角，最大 32；数值越大封面四角越圆",
+          "default_value": 0.0,
+          "min": 0.0,
+          "max": 32.0
+        }
+      ]
+    }
+  ]
+}

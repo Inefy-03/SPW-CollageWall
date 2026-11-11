@@ -1,0 +1,18 @@
+SPW Bravais Wall
+Copyright (C) 2026 SPW Bravais contributors
+
+This project is licensed under AGPL-3.0-or-later.
+
+Layout concepts and grid templates are derived from Folia / Bravais:
+https://github.com/chthollyphile/folia-major
+Copyright (C) Folia contributors, AGPL-3.0-or-later.
+
+Host structural discovery code is adapted from SPW Lyrics:
+https://github.com/GaBoron/SPW-Lyrics
+Copyright (C) SPW Lyrics contributors, MIT License.
+
+Playback adapter behavior was informed by SPW AI Playlist and spw-folia:
+https://github.com/AugustuXue/spw-ai-playlist
+https://github.com/azkbzxf/spw-folia
+
+Salt Player / SPW is not affiliated with this mod.

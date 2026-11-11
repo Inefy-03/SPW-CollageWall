@@ -1,0 +1,18 @@
+SPW Collage Wall
+Copyright (C) 2026 Inefy
+
+This project is licensed under AGPL-3.0-or-later.
+
+网格模板与重排思路参考了上游开源实现（AGPL-3.0-or-later）：
+https://github.com/chthollyphile/folia-major
+Copyright (C) Folia contributors, AGPL-3.0-or-later.
+
+Host structural discovery code is adapted from SPW Lyrics:
+https://github.com/GaBoron/SPW-Lyrics
+Copyright (C) SPW Lyrics contributors, MIT License.
+
+Playback adapter behavior was informed by SPW AI Playlist and spw-folia:
+https://github.com/AugustuXue/spw-ai-playlist
+https://github.com/azkbzxf/spw-folia
+
+Salt Player / SPW is not affiliated with this mod.

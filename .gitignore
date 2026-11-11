@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+*/build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Built plugin artifacts
+*.spmod
+
+# Local toolchains, caches and reference material (kept out of the repo)
+.tools/
+
+# Third-party API sources (fetched from Moriafly/spw-workshop-api instead)
+spw-workshop-api/
+
+# WorkBuddy workspace data
+.workbuddy/
+
+# OS noise
+.DS_Store
+Thumbs.db
