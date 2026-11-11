@@ -48,7 +48,7 @@ spmod {
     PluginClass = "dev.spw.collage.MainPlugin"
     PluginId = "dev.spw.collage"
     PluginName = "SPW Collage Wall"
-    PluginDescription = "混排比例的唱片封面墙：可自由平移到任意歌曲，当前歌曲高亮、点击展开并重排补位"
+    PluginDescription = "为 SPW 提供'拼贴封面墙'"
     PluginVersion = "1.0.0"
     PluginOpenSourceUrl = "https://github.com/Inefy-03/SPW-CollageWall"
     PluginProvider = "Inefy"
